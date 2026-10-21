@@ -1,0 +1,16 @@
+CacheMgrRpc:
+  Etcd:
+    Hosts:
+      - etcd:2379
+    Key: cachemgr.rpc
+
+KqConf:
+  Name: update_balance_cache_consumer
+  Brokers:
+    - kafka1:29092
+    - kafka2:29092
+    - kafka3:29092
+  Group: update_balance_cache_consumer
+  Topic: t_update_balance
+  Offset: last
+  Consumers: 3
