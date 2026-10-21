@@ -6,6 +6,7 @@ import (
 )
 
 type Config struct {
-	CacheMgrRpc zrpc.RpcClientConf
-	KqConf      kq.KqConf
+	CacheMgrRpc    zrpc.RpcClientConf
+	KqConf         kq.KqConf // t_update_balance 余额缓存更新
+	KqConfRelation kq.KqConf // t_update_relation relation缓存更新
 }

@@ -29,3 +29,12 @@ func (c *CacheMgrClient) UpdateBalance(ctx context.Context, uid, curType, balanc
 		BalanceModifyTimeMs: modifyTimeMs,
 	})
 }
+
+// UpdateRelation 回调 cache_mgr 的 UpdateRelation RPC, 由其执行实际的 redis relation 写入
+func (c *CacheMgrClient) UpdateRelation(ctx context.Context, userId string, uid int64) (*cache_mgr_pb.UpdateRelationRsp, error) {
+	client := cache_mgr_pb.NewCacheMgrClient(c.cli.Conn())
+	return client.UpdateRelation(ctx, &cache_mgr_pb.UpdateRelationReq{
+		UserId: userId,
+		Uid:    uid,
+	})
+}
