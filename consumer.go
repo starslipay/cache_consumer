@@ -18,8 +18,9 @@ type UpdateBalanceMessage struct {
 	BalanceModifyTimeMs int64 `json:"balance_modify_time_ms"` // 余额变更时间的毫秒部分(0-999)
 }
 
-// UpdateRelationMessage relation 缓存更新消息, 与 user_mgr 中 sendUpdateRelationMessage 投递的结构一致
+// UpdateRelationMessage relation 缓存消息, 与 user_mgr 中投递的结构一致
 type UpdateRelationMessage struct {
+	Op     string `json:"op"` // update-写入, delete-删除; 空兼容旧消息, 按 update 处理
 	UserId string `json:"user_id"`
 	Uid    int64  `json:"uid"`
 }
@@ -37,7 +38,7 @@ func NewUpdateRelationConsumer(cacheMgrClient *CacheMgrClient) *UpdateRelationCo
 	}
 }
 
-// Consume 消费 t_update_relation 消息, 回调 cache_mgr.UpdateRelation 执行 redis relation 写入
+// Consume 消费 t_update_relation 消息, 按 op 回调 cache_mgr 执行 redis relation 写入/删除
 func (c *UpdateRelationConsumer) Consume(ctx context.Context, message []byte) error {
 	var msg UpdateRelationMessage
 	if err := json.Unmarshal(message, &msg); err != nil {
@@ -45,24 +46,30 @@ func (c *UpdateRelationConsumer) Consume(ctx context.Context, message []byte) er
 		return err
 	}
 
-	c.logger.Infof("received update relation message: user_id=%s, uid=%d", msg.UserId, msg.Uid)
+	c.logger.Infof("received relation cache message: op=%s, user_id=%s, uid=%d", msg.Op, msg.UserId, msg.Uid)
 
 	maxRetries := 3
 	var lastErr error
 	for i := 0; i < maxRetries; i++ {
-		_, err := c.cacheMgrClient.UpdateRelation(ctx, msg.UserId, msg.Uid)
+		var err error
+		if msg.Op == "delete" {
+			_, err = c.cacheMgrClient.DeleteRelation(ctx, msg.UserId)
+		} else {
+			// 空 op 按 update 处理, 兼容旧格式消息
+			_, err = c.cacheMgrClient.UpdateRelation(ctx, msg.UserId, msg.Uid)
+		}
 		if err != nil {
 			lastErr = err
-			c.logger.Errorf("call UpdateRelation failed (retry %d/%d): %v", i+1, maxRetries, err)
+			c.logger.Errorf("call cache_mgr failed (retry %d/%d): %v", i+1, maxRetries, err)
 			time.Sleep(time.Duration(i+1) * time.Second)
 			continue
 		}
 
-		c.logger.Infof("update relation cache success: user_id=%s, uid=%d", msg.UserId, msg.Uid)
+		c.logger.Infof("relation cache %s success: user_id=%s, uid=%d", msg.Op, msg.UserId, msg.Uid)
 		return nil
 	}
 
-	c.logger.Errorf("call UpdateRelation failed after %d retries: %v", maxRetries, lastErr)
+	c.logger.Errorf("call cache_mgr failed after %d retries: %v", maxRetries, lastErr)
 	return fmt.Errorf("failed after %d retries: %w", maxRetries, lastErr)
 }
 
